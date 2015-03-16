@@ -5,7 +5,7 @@
  */
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
 
-	class EveOnline_Market {
+	class EveOnline_Market extends WP_CLI_Command {
 
 		protected $args, $assocargs, $page;
 
