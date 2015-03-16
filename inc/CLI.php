@@ -119,7 +119,7 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			}
 		}
 
-		function buildTree( $ar, $pid = null ) {
+		protected function buildTree( $ar, $pid = null ) {
 			$op = array();
 			foreach ( $ar as $item ) {
 				if ( $item['parent'] == $pid ) {
