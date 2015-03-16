@@ -7,7 +7,7 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 
 	class EveOnline_Market {
 
-		protected $args, $assocargs;
+		protected $args, $assocargs, $page;
 
 		protected $market_groups = array(
 			'endpoint' => 'market/groups',
@@ -19,6 +19,185 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 
 		protected $post_type = 'eve-market-items';
 		protected $taxonomy  = 'eve-market-groups';
+
+		/**
+		 * Import Market Items
+		 *
+		 * ## Options
+		 *
+		 * verbose
+		 * : Floods your screen with data
+		 *
+		 * warn
+		 * : Logging level will only warn of errors and continue
+		 *
+		 * live
+		 * : Actually imports the data
+		 *
+		 * @synopsis [--verbose] [--warn] [--live]
+		 */
+		public function types( $args = array(), $assocargs = array() ) {
+			$this->setup_args( $args, $assocargs );
+
+			$this->con = new Eve_Crest_Request( $this->market_types );
+			$types     = $this->con->get_decoded_body();
+			if ( ! $types ) {
+				$this->handle_errors( 'There are no available types.', 1 );
+			}
+
+			$items = isset( $types->items ) ? $types->items : false;
+			if ( ! $items ) {
+				$this->handle_errors( 'There are no available items.', 1 );
+			}
+
+			$this->progress_bar( count( $items ), 'Importing %s items' );
+			foreach ( $items as $item ) {
+				// We need these.
+				if ( ! isset( $item->marketGroup ) || ! isset( $item->type ) ) {
+					$this->progress_bar( 'tick' );
+					continue;
+				}
+
+				if ( $this->is_live() ) {
+					$result = $this->import_type( $item );
+					if ( is_wp_error( $result ) ) {
+						$this->handle_errors( $result->get_error_message() );
+					}
+				}
+
+				$this->progress_bar( 'tick' );
+			}
+			$this->progress_bar( 'finished' );
+
+			if ( $this->has_next_page( $types ) ) {
+				// Dynamic variable, only sets itself if there's a new page.
+				$this->page = 2;
+				WP_CLI::line( 'A new page is available, moving on to that one.' );
+				$this->import_next_page( $types );
+			}
+
+		}
+
+		protected function set_post_data( $post_id = 0, $type ) {
+			// Temporary variable
+			$result      = null;
+
+			$parent_slug = isset( $type->marketGroup->id ) ? $type->marketGroup->id : false;
+			if ( $parent_slug && 0 !== $post_id ) {
+				$term_data = get_term_by( 'slug', $parent_slug, $this->taxonomy );
+				if ( $term_data && isset( $term_data->term_id ) ) {
+					$terms = array(
+						$term_data->term_id,
+					);
+					$ancestors = get_ancestors( $term_data->term_id, $this->taxonomy );
+					if( $ancestors ){
+						foreach( $ancestors as $parent ){
+							$terms[] = $parent;
+						}
+					}
+
+					$result = wp_set_object_terms( $post_id, $terms, $this->taxonomy );
+				} else {
+					$this->handle_errors( 'Looking for group ID ' . $parent_slug . ' but cannot find it, are you sure you imported the groups?', 1 );
+				}
+			}
+
+			if ( is_wp_error( $result ) ) {
+				$this->handle_errors( $result->get_error_message(), 1 );
+			}
+
+			$id = isset( $type->type->id ) ? $type->type->id : false;
+			if ( $id ) {
+				$result = update_post_meta( $post_id, '_type_id', $id );
+				if ( ! $result ) {
+					$this->handle_errors( 'Cannot update the post meta for ' . $post_id . ' when trying to set _type_id to ' . $id, 1 );
+				}
+			}
+
+			//@TODO: Import images for each item type at this point.
+
+			return $post_id;
+		}
+
+		protected function import_type( $type ) {
+
+			$type_data  = $type->type;
+			$post_title = isset( $type_data->name ) ? $type_data->name : false;
+			if ( ! $post_title ) {
+				$this->handle_errors( 'Cannot insert a post without a title, sorry!', 1 );
+			}
+
+			$args = array(
+				'post_title'  => $post_title,
+				'post_type'   => $this->post_type,
+				'post_status' => 'publish',
+			);
+
+			$new_post_id = wp_insert_post( $args, true );
+			if ( is_wp_error( $new_post_id ) ) {
+				return $new_post_id;
+			}
+
+			return $this->set_post_data( $new_post_id, $type );
+		}
+
+		protected function has_next_page( $object ) {
+			return isset( $object->next );
+		}
+
+		protected function import_next_page( $object ) {
+			if ( ! $this->page ) {
+				$this->handle_errors( 'FATAL: Trying to import a page without a page var.', 1 );
+
+				return null; // bail, we need this.
+			}
+
+			// Set the endpoint
+			$endpoint               = $this->market_types;
+			$endpoint['url_params'] = array(
+				'page' => $this->page,
+			);
+
+			$this->con = new Eve_Crest_Request( $endpoint );
+			$types     = $this->con->get_decoded_body();
+			if ( ! $types ) {
+				$this->handle_errors( 'There are no available types.', 1 );
+			}
+
+			$items = isset( $types->items ) ? $types->items : false;
+			if ( ! $items ) {
+				$this->handle_errors( 'There are no available items.', 1 );
+			}
+
+			$this->progress_bar( count( $items ), 'Importing %s items' );
+			foreach ( $items as $item ) {
+				// We need these.
+				if ( ! isset( $item->marketGroup ) || ! isset( $item->type ) ) {
+					$this->progress_bar( 'tick' );
+					continue;
+				}
+
+				if ( $this->is_live() ) {
+					$result = $this->import_type( $item );
+					if ( is_wp_error( $result ) ) {
+						$this->handle_errors( $result->get_error_message() );
+					}
+				}
+
+				$this->progress_bar( 'tick' );
+			}
+			$this->progress_bar( 'finished' );
+
+			if ( $this->has_next_page( $types ) ) {
+				$this->page ++;
+				WP_CLI::line( 'A new page is available, moving on to that one.' );
+				$this->import_next_page( $types );
+			} else {
+				WP_CLI::success( 'Finished importing item types.' );
+			}
+
+
+		}
 
 		/**
 		 * Import Market Groups
@@ -34,13 +213,11 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		 * @synopsis [--verbose] [--warn]
 		 */
 		public function groups( $args = array(), $assocargs = array() ) {
-			$this->args      = $args;
-			$this->assocargs = $assocargs;
+			$this->setup_args( $args, $assocargs );
 
 			$this->con = new Eve_Crest_Request( $this->market_groups );
 
 			$groups = $this->con->get_decoded_body();
-//			$this->display_verbose( print_r( $groups ) );
 			if ( ! $groups ) {
 				$this->handle_errors( 'There are no available groups.', 1 );
 			}
@@ -275,6 +452,8 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		}
 
 		protected function handle_errors( $message, $override = false ) {
+
+			WP_CLI::line( '' );
 			if ( $this->is_warn() && ! $override ) {
 				WP_CLI::warning( $message );
 			} else {
@@ -298,6 +477,11 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			if ( $this->is_verbose() ) {
 				WP_CLI::line( $message );
 			}
+		}
+
+		protected function setup_args( $args, $assocargs ) {
+			$this->args      = $args;
+			$this->assocargs = $assocargs;
 		}
 
 	}
