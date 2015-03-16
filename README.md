@@ -2,7 +2,7 @@
 
 This WordPress Plugin adds [WP_CLI](http://wp-cli.org/) commands for importing data from the EvE Crest API
 and adds custom post types and taxonomies where necessary.  In-turn, allowing any WordPress geek
-full control over the data.
+full control over the data.  Sure! You can do this with the static data dump, but where's the fun in that?
 
 ## Current CLI Commands
 ### groups 
