@@ -21,45 +21,9 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		protected $taxonomy  = 'eve-market-groups';
 
 		/**
-		 * Dumps Tree data to json
-		 */
-		public function dump_json( $args = array(), $assocargs = array() ){
-			$this->args = $args;
-			$this->assocargs = $assocargs;
-
-			$this->con = new Eve_Crest_Request( $this->market_groups );
-
-			$groups = $this->con->get_decoded_body();
-//			$this->display_verbose( print_r( $groups ) );
-			if ( ! $groups ) {
-				$this->handle_errors( 'There are no available groups.', 1 );
-			}
-
-			if ( ! isset( $groups->items ) ) {
-				$this->handle_errors( 'There are no available items', 1 );
-			}
-
-			$data_map = $this->build_data_map( $groups );
-			$tree     = '';;
-			if ( ! $data_map ) {
-				$this->handle_errors( 'No datamap can be built', 1 );
-			} else {
-				$tree = $this->buildTree( $data_map );
-				ksort( $tree );
-				$this->display_verbose( 'Dumping data map to error log' );
-				error_log( json_encode( $tree ) );
-				$this->display_verbose( 'Dumped' );
-
-			}
-		}
-
-		/**
 		 * Import Market Groups
 		 *
 		 * ## Options
-		 *
-		 * live
-		 * : Really imports data
 		 *
 		 * verbose
 		 * : Floods your screen with data
@@ -67,7 +31,7 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		 * warn
 		 * : Logging level will only warn of errors and continue
 		 *
-		 * @synopsis [--live] [--verbose] [--warn]
+		 * @synopsis [--verbose] [--warn]
 		 */
 		public function groups( $args = array(), $assocargs = array() ) {
 			$this->args      = $args;
