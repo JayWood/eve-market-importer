@@ -17,6 +17,8 @@ This command imports market groups to the market groups taxonomy in a hierarchic
 it uses the [market/groups](http://public-crest.eveonline.com/market/groups/) endpoint, re-formats the data into a prettier
 format, [like this](https://gist.github.com/JayWood/7f6025d4feea193ae3f3), and walks through the array importing each and every one, one by one.
 
+**This command DOES NOT re-import the groups, so it's not really safe to run it more than once.  I will be updating it to do so in the near future.**
+
 ## Screenshots
 ![Nested Market Groups](https://raw.githubusercontent.com/JayWood/eve-market-importer/master/screenshot-1.jpg)   
 Nested Market Groups
